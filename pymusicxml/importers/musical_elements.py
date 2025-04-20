@@ -12,7 +12,7 @@ import xml.etree.ElementTree as ET
 
 from pymusicxml.score_components import (
     Note, Rest, BarRest, Chord, GraceNote, GraceChord,
-    Pitch, Duration, Notehead, BeamedGroup, BarRestDuration
+    Pitch, Duration, Notehead, BeamedGroup, BarRestDuration, Tuplet
 )
 from pymusicxml.notations import (
     StartGliss, StopGliss, StartMultiGliss, StopMultiGliss
@@ -477,20 +477,22 @@ class MusicalElementsImporter:
             
         # Import notes in the beamed group
         contents = []
-        for i in range(start_idx, end_idx + 1):
-            note_elem = note_elems[i]
+        current_idx = start_idx
+        while current_idx <= end_idx:
+            note_elem = note_elems[current_idx]
             
             # Check if this is part of a chord
             is_chord = find_element(note_elem, "chord") is not None
             
             if is_chord:
                 # Skip chord notes, they will be handled as part of the chord
+                current_idx += 1
                 continue
                 
             # Check if this note is the start of a chord
             chord_notes = [note_elem]
-            next_idx = i + 1
-            while next_idx < len(note_elems) and find_element(note_elems[next_idx], "chord") is not None:
+            next_idx = current_idx + 1
+            while next_idx < len(note_elems) and next_idx <= end_idx and find_element(note_elems[next_idx], "chord") is not None:
                 chord_notes.append(note_elems[next_idx])
                 next_idx += 1
                 
@@ -499,13 +501,236 @@ class MusicalElementsImporter:
                 chord = MusicalElementsImporter.import_chord(note_elem, chord_notes, find_element, get_text, find_elements)
                 if chord:
                     contents.append(chord)
+                current_idx = next_idx
             else:
                 # This is a regular note or rest
                 note = MusicalElementsImporter.import_note(note_elem, find_element, get_text, find_elements)
                 if note:
                     contents.append(note)
+                current_idx += 1
         
         if not contents:
             return None
             
-        return BeamedGroup(contents=contents) 
+        # Create and return the BeamedGroup
+        return BeamedGroup(contents=contents)
+    
+    @staticmethod
+    def import_tuplet(measure_elem, find_element, find_elements, get_text, start_idx, end_idx) -> Optional[Tuplet]:
+        """
+        Import a tuplet from measure elements.
+        
+        Args:
+            measure_elem: The measure element
+            find_element: Method to find child elements
+            find_elements: Method to find multiple child elements
+            get_text: Method to get text content
+            start_idx: Starting index of the tuplet
+            end_idx: Ending index of the tuplet
+            
+        Returns:
+            A Tuplet object or None if no tuplet is found
+        """
+        note_elems = find_elements(measure_elem, "note")
+        if not note_elems or start_idx >= len(note_elems) or end_idx >= len(note_elems):
+            return None
+        
+        # First, create a beamed group with the contents
+        beamed_group = MusicalElementsImporter.import_beamed_group(
+            measure_elem, find_element, find_elements, get_text, start_idx, end_idx
+        )
+        
+        if not beamed_group or not beamed_group.contents:
+            return None
+        
+        # Extract the tuplet ratio from the first note
+        first_note_elem = note_elems[start_idx]
+        time_modification = find_element(first_note_elem, "time-modification")
+        if time_modification is None:
+            logger.warning("Tuplet missing time-modification element")
+            return None
+        
+        actual_notes = int(get_text(time_modification, "actual-notes", "1"))
+        normal_notes = int(get_text(time_modification, "normal-notes", "1"))
+        
+        if actual_notes == normal_notes:
+            logger.warning("Invalid tuplet ratio: actual notes equals normal notes")
+            return None
+        
+        ratio = (actual_notes, normal_notes)
+        
+        # Create the tuplet
+        return Tuplet(contents=beamed_group.contents, ratio=ratio)
+    
+    @staticmethod
+    def identify_groups_in_measure(measure_elem, find_element, find_elements, get_text) -> List[Union[Note, Rest, Chord, BeamedGroup, Tuplet]]:
+        """
+        Identify and process beamed groups and tuplets in a measure.
+        
+        Args:
+            measure_elem: The measure element
+            find_element: Method to find child elements
+            find_elements: Method to find multiple child elements
+            get_text: Method to get text content
+            
+        Returns:
+            A list of musical elements, with beamed groups and tuplets properly grouped
+        """
+        note_elems = find_elements(measure_elem, "note")
+        if not note_elems:
+            return []
+            
+        # Dictionary to store groups with their starting positions
+        element_positions = {}
+        processed_indices = set()
+        
+        # First, identify tuplet groups
+        tuplet_groups = []
+        current_tuplet = None
+        
+        for i, note_elem in enumerate(note_elems):
+            if i in processed_indices:
+                continue
+                
+            # Skip chord members - they'll be processed with their parent
+            if find_element(note_elem, "chord") is not None:
+                processed_indices.add(i)
+                continue
+                
+            # Check for tuplet notation
+            notations_elem = find_element(note_elem, "notations")
+            tuplet_elem = None
+            if notations_elem is not None:
+                tuplet_elem = find_element(notations_elem, "tuplet")
+                
+            # Check for time modification (required for tuplets)
+            time_modification = find_element(note_elem, "time-modification")
+            
+            # Process tuplet start
+            if tuplet_elem is not None and tuplet_elem.get("type") == "start":
+                current_tuplet = {"start": i, "end": None}
+            
+            # Process tuplet stop
+            if tuplet_elem is not None and tuplet_elem.get("type") == "stop":
+                if current_tuplet is not None:
+                    current_tuplet["end"] = i
+                    tuplet_groups.append(current_tuplet)
+                    current_tuplet = None
+            
+            # If we have a time modification but no tuplet notation,
+            # this note is part of a tuplet
+            if time_modification is not None and current_tuplet is None:
+                # This is a tuplet without proper start/stop marks
+                # Try to infer the tuplet grouping based on time modification
+                actual_notes = int(get_text(time_modification, "actual-notes", "1"))
+                normal_notes = int(get_text(time_modification, "normal-notes", "1"))
+                
+                if actual_notes != normal_notes:
+                    # Look ahead for notes with the same time modification
+                    tuplet_start = i
+                    tuplet_end = i
+                    for j in range(i + 1, len(note_elems)):
+                        next_time_mod = find_element(note_elems[j], "time-modification")
+                        if next_time_mod is not None:
+                            next_actual = int(get_text(next_time_mod, "actual-notes", "1"))
+                            next_normal = int(get_text(next_time_mod, "normal-notes", "1"))
+                            if next_actual == actual_notes and next_normal == normal_notes:
+                                tuplet_end = j
+                            else:
+                                break
+                        else:
+                            break
+                    
+                    if tuplet_end > tuplet_start:
+                        tuplet_groups.append({"start": tuplet_start, "end": tuplet_end})
+        
+        # Create tuplets for identified groups and store with position
+        for group in tuplet_groups:
+            tuplet = MusicalElementsImporter.import_tuplet(
+                measure_elem, find_element, find_elements, get_text, 
+                group["start"], group["end"]
+            )
+            if tuplet:
+                element_positions[group["start"]] = tuplet
+                # Mark all indices in this group as processed
+                processed_indices.update(range(group["start"], group["end"] + 1))
+        
+        # Now identify beamed groups among remaining notes
+        beam_groups = []
+        current_beam = None
+        
+        for i, note_elem in enumerate(note_elems):
+            if i in processed_indices:
+                continue
+                
+            # Skip chord members - they'll be processed with their parent
+            if find_element(note_elem, "chord") is not None:
+                processed_indices.add(i)
+                continue
+            
+            # Look for beam elements
+            beam_elems = find_elements(note_elem, "beam") or []
+            
+            # Process beam start
+            for beam in beam_elems:
+                if beam.text == "begin":
+                    current_beam = {"start": i, "end": None}
+                    break
+            
+            # Process beam end
+            for beam in beam_elems:
+                if beam.text == "end":
+                    if current_beam is not None:
+                        current_beam["end"] = i
+                        beam_groups.append(current_beam)
+                        current_beam = None
+                    break
+        
+        # Create beamed groups for identified groups and store with position
+        for group in beam_groups:
+            beamed_group = MusicalElementsImporter.import_beamed_group(
+                measure_elem, find_element, find_elements, get_text, 
+                group["start"], group["end"]
+            )
+            if beamed_group:
+                element_positions[group["start"]] = beamed_group
+                # Mark all indices in this group as processed
+                processed_indices.update(range(group["start"], group["end"] + 1))
+        
+        # Process remaining notes individually
+        for i, note_elem in enumerate(note_elems):
+            if i in processed_indices:
+                continue
+                
+            # Skip chord members - they'll be processed with their parent
+            if find_element(note_elem, "chord") is not None:
+                processed_indices.add(i)
+                continue
+                
+            # Check if this note is the start of a chord
+            chord_notes = [note_elem]
+            j = i + 1
+            while j < len(note_elems) and find_element(note_elems[j], "chord") is not None:
+                chord_notes.append(note_elems[j])
+                processed_indices.add(j)
+                j += 1
+                
+            if len(chord_notes) > 1:
+                # This is a chord
+                chord = MusicalElementsImporter.import_chord(note_elem, chord_notes, find_element, get_text, find_elements)
+                if chord:
+                    element_positions[i] = chord
+            else:
+                # This is a regular note or rest
+                note = MusicalElementsImporter.import_note(note_elem, find_element, get_text, find_elements)
+                if note:
+                    element_positions[i] = note
+            
+            processed_indices.add(i)
+        
+        # Sort elements by their position in the original MusicXML
+        sorted_result = []
+        for pos in sorted(element_positions.keys()):
+            sorted_result.append(element_positions[pos])
+            
+        return sorted_result 

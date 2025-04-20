@@ -282,57 +282,23 @@ class ScoreImporter(MusicXMLImporter):
         Returns:
             A list of musical elements organized by voice
         """
-        # Find all note elements
-        note_elems = self._find_elements(measure_elem, "note")
+        # Use the new method to identify and process groups
+        all_elements = MusicalElementsImporter.identify_groups_in_measure(
+            measure_elem, self._find_element, self._find_elements, self._get_text
+        )
         
         # Dictionary to organize elements by voice
         voice_elements = {}
         
-        # Process notes
-        i = 0
-        while i < len(note_elems):
-            note_elem = note_elems[i]
+        # Process all elements and organize by voice
+        for element in all_elements:
+            # Get the voice number (default to 1 if not specified)
+            voice = getattr(element, 'voice', 1) or 1
             
-            # Check if this is part of a chord
-            is_chord = self._find_element(note_elem, "chord") is not None
-            
-            if is_chord:
-                # Skip chord members, they're handled with the chord root
-                i += 1
-                continue
-            
-            # Check if this note is the start of a chord
-            chord_notes = [note_elem]
-            j = i + 1
-            while j < len(note_elems) and self._find_element(note_elems[j], "chord") is not None:
-                chord_notes.append(note_elems[j])
-                j += 1
-                
-            element = None
-            if len(chord_notes) > 1:
-                # This is a chord
-                element = MusicalElementsImporter.import_chord(
-                    note_elem, chord_notes, self._find_element, self._get_text, self._find_elements
-                )
-                i = j  # Skip all processed chord notes
-            else:
-                # Regular note or rest
-                element = MusicalElementsImporter.import_note(
-                    note_elem, self._find_element, self._get_text, self._find_elements
-                )
-                i += 1
-            
-            if element:
-                # Get the voice number (default to 1 if not specified)
-                voice = getattr(element, 'voice', 1) or 1
-                
-                # Add to the corresponding voice
-                if voice not in voice_elements:
-                    voice_elements[voice] = []
-                voice_elements[voice].append(element)
-                
-        # TODO: Process BeamedGroups and Tuplets
-        # TODO: Implement directions import
+            # Add to the corresponding voice
+            if voice not in voice_elements:
+                voice_elements[voice] = []
+            voice_elements[voice].append(element)
         
         # Check if we have only one voice
         if len(voice_elements) == 1:
