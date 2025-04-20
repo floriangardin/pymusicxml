@@ -6,8 +6,8 @@ non-hierarchical. For instance, there are no separate objects for chords and tup
 annotations to the note objects themselves. In pymusicxml, chords are represented similarly to notes but with multiple
 pitches, and tuplets are treated as containers for notes, chords, and rests.
 
-At the moment, this library is intended as a tool for composition, making it easier to construct and export MusicXML
-scores in Python. In the future, the ability to parse existing MusicXML scores may be added.
+This library provides both export and import functionality for MusicXML files, making it a comprehensive tool for working 
+with MusicXML in Python.
 """
 
 #  ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++  #
@@ -27,7 +27,8 @@ scores in Python. In the future, the ability to parse existing MusicXML scores m
 #  ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++  #
 
 from .score_components import Pitch, Duration, BarRestDuration, Note, Rest, BarRest, Chord, GraceNote, GraceChord, \
-    BeamedGroup, Tuplet, Clef, Transpose, Measure, Part, PartGroup, Score, Notehead, Notation, Direction
+    BeamedGroup, Tuplet, Clef, Transpose, Measure, Part, PartGroup, Score, Notehead, Notation, Direction, \
+    KeySignature, TraditionalKeySignature, NonTraditionalKeySignature
 from pymusicxml.notations import StartGliss, StopGliss, StartMultiGliss, StopMultiGliss, Fermata, Arpeggiate, \
     NonArpeggiate, Technical, UpBow, DownBow, OpenString, Harmonic, Stopped, SnapPizzicato, Ornament, Mordent, Turn, \
     TrillMark, Schleifer, Tremolo
@@ -35,7 +36,8 @@ from pymusicxml.directions import Harmony, Degree, MetronomeMark, TextAnnotation
 from pymusicxml.spanners import StopBracket, StartBracket, StopDashes, StartDashes, StopTrill, StartTrill, StopPedal, \
     ChangePedal, StartPedal, StopHairpin, StartHairpin, StopSlur, StartSlur
 from pymusicxml.enums import *
+from pymusicxml.importer import import_musicxml
 import importlib.metadata
 
-__version__ = importlib.metadata.version('pymusicxml')
-__author__ = importlib.metadata.metadata('pymusicxml')['Author']
+#__version__ = importlib.metadata.version('pymusicxml')
+#__author__ = importlib.metadata.metadata('pymusicxml')['Author']
