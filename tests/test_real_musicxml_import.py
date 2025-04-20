@@ -6,14 +6,16 @@ import os
 import pytest
 from pathlib import Path
 
-from pymusicxml import import_musicxml, TraditionalKeySignature
+from pymusicxml import import_musicxml, TraditionalKeySignature, PartGroup, Part
 
+current_dir = Path(__file__).parent
+test_file = current_dir / "data" / "main.musicxml"
 
 def test_import_main_musicxml():
     """Test importing the main.musicxml file from the project."""
     # Path to the main.musicxml file
-    file_path = Path("main.musicxml")
-    
+    file_path = test_file
+
     # Make sure the file exists
     assert file_path.exists(), f"Test file {file_path} does not exist"
     
@@ -32,7 +34,23 @@ def test_import_main_musicxml():
     
     # Check part grouping
     assert len(score.contents) == 2  # One PartGroup and one Part
-    assert score.contents[1].part_name == "Bassoon"  # The standalone part
+    
+    # Enhanced PartGroup testing
+    assert isinstance(score.contents[0], PartGroup)
+    assert isinstance(score.contents[1], Part)
+    
+    # Test PartGroup properties
+    part_group = score.contents[0]
+    assert part_group.has_bracket == True
+    assert part_group.has_group_bar_line == True
+    
+    # Test PartGroup contents
+    assert len(part_group.parts) == 2
+    assert part_group.parts[0].part_name == "Oboe"
+    assert part_group.parts[1].part_name == "Bb Clarinet"
+    
+    # Test the standalone part
+    assert score.contents[1].part_name == "Bassoon"
     
     # Check measures
     for part in score.parts:
