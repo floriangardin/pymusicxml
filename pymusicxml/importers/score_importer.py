@@ -8,6 +8,7 @@ from MusicXML files.
 import logging
 from typing import Dict, Optional, Sequence, Union
 from pathlib import Path
+import xml.etree.ElementTree as ET
 
 from pymusicxml.importers.base_importer import MusicXMLImporter
 from pymusicxml.importers.musical_elements import MusicalElementsImporter
@@ -16,6 +17,7 @@ from pymusicxml.score_components import (
     TraditionalKeySignature, NonTraditionalKeySignature, Transpose,
     Note, Rest, BarRest, Chord, BeamedGroup
 )
+from pymusicxml.importers.directions_notations import DirectionsImporter
 
 # Set up logging
 logger = logging.getLogger(__name__)
@@ -196,10 +198,19 @@ class ScoreImporter(MusicXMLImporter):
         clef = None
         transpose = None
         barline = None
+        divisions = 1  # Default divisions value (if not specified)
         
         # Extract attributes
         attributes_elem = self._find_element(measure_elem, "attributes")
         if attributes_elem is not None:
+            # Get divisions value for timing calculations
+            divisions_text = self._get_text(attributes_elem, "divisions")
+            if divisions_text:
+                try:
+                    divisions = float(divisions_text)
+                except ValueError:
+                    logger.warning(f"Invalid divisions value: {divisions_text}")
+            
             # Import time signature
             time_elem = self._find_element(attributes_elem, "time")
             if time_elem is not None:
@@ -215,19 +226,24 @@ class ScoreImporter(MusicXMLImporter):
                 mode = self._get_text(key_elem, "mode", "major")
                 
                 # Check for non-traditional key
-                key_step = self._get_text(key_elem, "key-step")
-                key_alter = self._get_text(key_elem, "key-alter")
-                key_octave = self._get_text(key_elem, "key-octave")
+                key_steps = self._find_elements(key_elem, "key-step")
                 
-                if key_step and key_octave:
-                    # Non-traditional key signature
-                    key_alter_value = float(key_alter) if key_alter else 0
-                    key = NonTraditionalKeySignature(
-                        tonic_step=key_step,
-                        tonic_alter=key_alter_value,
-                        tonic_octave=int(key_octave),
-                        mode=mode
-                    )
+                if key_steps:
+                    # Non-traditional key signature with multiple alterations
+                    key = NonTraditionalKeySignature()
+                    step_elements = [(
+                        self._get_text(key_elem, f"key-step", None, i),
+                        self._get_text(key_elem, f"key-alter", "0", i),
+                        self._get_text(key_elem, f"key-accidental", None, i)
+                    ) for i in range(len(key_steps))]
+                    
+                    for step, alter, accidental in step_elements:
+                        if step:
+                            try:
+                                alter_value = float(alter) if alter else 0
+                                key.add_alteration(step, alter_value, accidental)
+                            except ValueError:
+                                logger.warning(f"Invalid key alteration value: {alter}")
                 elif fifths:
                     # Traditional key signature
                     key = TraditionalKeySignature(fifths=int(fifths), mode=mode)
@@ -260,6 +276,111 @@ class ScoreImporter(MusicXMLImporter):
         # Import notes, rests, and other musical elements
         contents = self._import_measure_contents(measure_elem)
         
+        # Process all elements chronologically to build a position map
+        element_positions = {}  # Maps elements to their positions in the measure
+        current_position = 0.0  # Position in quarter notes
+        
+        # First pass: Process all child elements in order and track positions
+        for child in measure_elem:
+            if child.tag.endswith("note"):
+                is_grace = self._find_element(child, "grace") is not None
+                is_chord = self._find_element(child, "chord") is not None
+                
+                # Skip chord members (handled with main chord note)
+                if is_chord:
+                    continue
+                    
+                # Grace notes don't advance position
+                if is_grace:
+                    element_positions[child] = current_position
+                    continue
+                
+                # Regular notes/rests advance position based on duration
+                duration_text = self._get_text(child, "duration")
+                if duration_text:
+                    try:
+                        duration_divisions = float(duration_text)
+                        duration_quarters = duration_divisions / divisions
+                        
+                        # Store position and advance
+                        element_positions[child] = current_position
+                        current_position += duration_quarters
+                    except ValueError:
+                        logger.warning(f"Invalid duration value: {duration_text}")
+            
+            # Handle forward elements (advance position without creating an element)
+            elif child.tag.endswith("forward"):
+                duration_text = self._get_text(child, "duration")
+                if duration_text:
+                    try:
+                        duration_divisions = float(duration_text)
+                        duration_quarters = duration_divisions / divisions
+                        
+                        # Advance position
+                        current_position += duration_quarters
+                    except ValueError:
+                        logger.warning(f"Invalid duration value in forward: {duration_text}")
+            
+            # Handle backup elements (move position backwards)
+            elif child.tag.endswith("backup"):
+                duration_text = self._get_text(child, "duration")
+                if duration_text:
+                    try:
+                        duration_divisions = float(duration_text)
+                        duration_quarters = duration_divisions / divisions
+                        
+                        # Move position backwards
+                        current_position -= duration_quarters
+                        # Prevent negative position
+                        current_position = max(0.0, current_position)
+                    except ValueError:
+                        logger.warning(f"Invalid duration value in backup: {duration_text}")
+            
+            # Store position for non-note elements (e.g., directions, harmonies)
+            elif child.tag.endswith("direction") or child.tag.endswith("harmony"):
+                element_positions[child] = current_position
+                
+                # Check for offset
+                offset_elem = self._find_element(child, "offset")
+                if offset_elem is not None and offset_elem.text:
+                    try:
+                        offset_divisions = float(offset_elem.text)
+                        offset_quarters = offset_divisions / divisions
+                        
+                        # Update position with offset
+                        element_positions[child] += offset_quarters
+                    except ValueError:
+                        logger.warning(f"Invalid offset value: {offset_elem.text}")
+        
+        # Process directions and harmonies with correct positions
+        directions_with_displacements = []
+        
+        # Process direction elements
+        for direction_elem in self._find_elements(measure_elem, "direction"):
+            direction = DirectionsImporter.import_direction(
+                direction_elem, self._find_element, self._get_text, self._find_elements
+            )
+            
+            if direction:
+                # Use position from the map
+                position = element_positions.get(direction_elem, 0.0)
+                directions_with_displacements.append((direction, position))
+        
+        # Process harmony elements
+        for harmony_elem in self._find_elements(measure_elem, "harmony"):
+            # Create a temporary direction element to wrap the harmony
+            temp_direction = ET.Element("direction")
+            temp_direction.append(harmony_elem)
+            
+            harmony = DirectionsImporter.import_direction(
+                temp_direction, self._find_element, self._get_text, self._find_elements
+            )
+            
+            if harmony:
+                # Use position from the map
+                position = element_positions.get(harmony_elem, 0.0)
+                directions_with_displacements.append((harmony, position))
+        
         # Create measure
         measure = Measure(
             contents=contents,
@@ -267,7 +388,8 @@ class ScoreImporter(MusicXMLImporter):
             key=key,
             clef=clef,
             transpose=transpose,
-            barline=barline
+            barline=barline,
+            directions_with_displacements=directions_with_displacements
         )
         
         return measure

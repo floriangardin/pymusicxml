@@ -98,7 +98,7 @@ class MusicXMLImporter:
             
         return elements
     
-    def _get_text(self, parent, tag, default=None) -> str:
+    def _get_text(self, parent, tag, default=None, index=None) -> str:
         """
         Get the text content of an element within the parent.
         
@@ -106,9 +106,16 @@ class MusicXMLImporter:
             parent: Parent element to search in
             tag: Tag name to search for
             default: Default value to return if element not found
+            index: Index for selecting a specific element when multiple elements exist with the same tag
             
         Returns:
             Text content of the element or default if not found
         """
+        if index is not None:
+            elements = self._find_elements(parent, tag)
+            if elements and 0 <= index < len(elements):
+                return elements[index].text if elements[index].text is not None else default
+            return default
+        
         element = self._find_element(parent, tag)
-        return element.text if element is not None else default 
+        return element.text if element is not None and element.text is not None else default 

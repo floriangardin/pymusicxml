@@ -103,9 +103,25 @@ class MusicalElementsImporter:
         if notehead_elem is None:
             return None
             
-        notehead_type = notehead_elem.text if notehead_elem.text else "normal"
-        filled = notehead_elem.get("filled", "default") != "no"
+        # Get the notehead type from the element text
+        notehead_type = notehead_elem.text.strip().lower() if notehead_elem.text else "normal"
         
+        # Make sure the notehead type is valid
+        if notehead_type not in Notehead.valid_xml_types:
+            logger.warning(f"Unknown notehead type: {notehead_type}, defaulting to 'normal'")
+            notehead_type = "normal"
+        
+        # Get the filled attribute
+        filled_attr = notehead_elem.get("filled")
+        filled = None
+        
+        if filled_attr is not None:
+            if filled_attr.lower() == "yes":
+                filled = True
+            elif filled_attr.lower() == "no":
+                filled = False
+        
+        # Create the notehead
         return Notehead(notehead_name=notehead_type, filled=filled)
     
     @staticmethod
@@ -579,6 +595,19 @@ class MusicalElementsImporter:
         note_elems = find_elements(measure_elem, "note")
         if not note_elems:
             return []
+        
+        # Find all forward elements in the measure
+        # We don't directly create musical elements for forward/backup elements
+        # These are implicit in the MusicXML and handled by position tracking in ScoreImporter
+        forward_elems = find_elements(measure_elem, "forward")
+        backup_elems = find_elements(measure_elem, "backup")
+        
+        # Log the presence of forward/backup elements for debugging
+        if forward_elems:
+            logger.debug(f"Found {len(forward_elems)} forward elements in measure")
+            
+        if backup_elems:
+            logger.debug(f"Found {len(backup_elems)} backup elements in measure")
             
         # Dictionary to store groups with their starting positions
         element_positions = {}
