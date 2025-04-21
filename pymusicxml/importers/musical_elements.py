@@ -16,7 +16,9 @@ from pymusicxml.score_components import (
 )
 from pymusicxml.notations import (
     StartGliss, StopGliss, StartMultiGliss, StopMultiGliss,
-    TrillMark
+    TrillMark, Mordent, Turn, Arpeggiate, NonArpeggiate,
+    UpBow, DownBow, OpenString, Harmonic, Stopped, SnapPizzicato,
+    Schleifer, Tremolo
 )
 from pymusicxml.spanners import StartSlur, StopSlur, StartTrill, StopTrill
 
@@ -145,13 +147,10 @@ class MusicalElementsImporter:
         if notations_elem is None:
             return notations
             
-        # Handle ornaments (trill)
+        # Handle ornaments (trill spans, beams)
         ornaments_elem = find_element(notations_elem, "ornaments")
         if ornaments_elem is not None:
-            # Handle trill-mark
-            trill_mark_elem = find_element(ornaments_elem, "trill-mark")
-            if trill_mark_elem is not None:
-                notations.append(TrillMark())
+            # Note: We don't process trill-mark here, since it's processed by NotationsImporter
             
             # Handle wavy-line (for trill spans)
             wavy_line_elems = find_elements(ornaments_elem, "wavy-line") or []
@@ -170,7 +169,7 @@ class MusicalElementsImporter:
                     notations.append(StartTrill(label=label, placement=placement, accidental=accidental))
                 elif wavy_type == "stop":
                     notations.append(StopTrill(label=label, placement=placement))
-        
+
         # Handle glissandos
         glissando_elems = find_elements(notations_elem, "glissando") or []
         slide_elems = find_elements(notations_elem, "slide") or []
@@ -198,7 +197,18 @@ class MusicalElementsImporter:
             elif slur_type == "stop":
                 notations.append(StopSlur(label=label))
         
-        # TODO: Add more notation types (articulations, ornaments, technical, etc.)
+        # Use the general NotationsImporter for all other notation types
+        # This will handle ornaments like mordents, turns, as well as technical markings
+        from pymusicxml.importers.directions_notations import NotationsImporter
+        notation_result = NotationsImporter.import_notation(notations_elem, find_element, lambda x, y: x.findtext(y), find_elements)
+        
+        if notation_result is not None:
+            if isinstance(notation_result, list):
+                # If NotationsImporter returned a list of notations, extend our list
+                notations.extend(notation_result)
+            else:
+                # If NotationsImporter returned a single notation, append it
+                notations.append(notation_result)
         
         return notations
     

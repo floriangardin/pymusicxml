@@ -11,7 +11,7 @@ from typing import Dict, List, Optional, Tuple, Union
 import xml.etree.ElementTree as ET
 
 from pymusicxml.directions import Direction, Dynamic, MetronomeMark, TextAnnotation, Harmony, Degree
-from pymusicxml.notations import Notation, Fermata, Arpeggiate, NonArpeggiate
+from pymusicxml.notations import Notation, Fermata, Arpeggiate, NonArpeggiate, Mordent, Turn, Schleifer, TrillMark, Tremolo, UpBow, DownBow, OpenString, Harmonic, Stopped, SnapPizzicato
 from pymusicxml.enums import StaffPlacement, ArpeggiationDirection, HairpinType
 from pymusicxml.spanners import (
     StartBracket, StopBracket, StartPedal, StopPedal, ChangePedal,
@@ -433,7 +433,7 @@ class NotationsImporter:
     """
     
     @staticmethod
-    def import_notation(notation_elem, find_element, get_text, find_elements) -> Optional[Notation]:
+    def import_notation(notation_elem, find_element, get_text, find_elements) -> Optional[Union[Notation, List[Notation]]]:
         """
         Import a notation element.
         
@@ -444,13 +444,15 @@ class NotationsImporter:
             find_elements: Method to find multiple child elements
             
         Returns:
-            A Notation object or None if not recognized
+            A Notation object, a list of Notation objects, or None if not recognized
         """
+        notations = []
+        
         # Check for fermata
         fermata_elem = find_element(notation_elem, "fermata")
         if fermata_elem is not None:
             inverted = fermata_elem.get("type") == "inverted"
-            return Fermata(inverted=inverted)
+            notations.append(Fermata(inverted=inverted))
             
         # Check for arpeggiate
         arpeggiate_elem = find_element(notation_elem, "arpeggiate")
@@ -463,13 +465,119 @@ class NotationsImporter:
             elif direction_text == "down":
                 direction = ArpeggiationDirection.DOWN
                 
-            return Arpeggiate(direction=direction)
+            notations.append(Arpeggiate(direction=direction))
             
         # Check for non-arpeggiate
         non_arpeggiate_elem = find_element(notation_elem, "non-arpeggiate")
         if non_arpeggiate_elem is not None:
-            return NonArpeggiate()
+            notations.append(NonArpeggiate())
             
-        # Handle other notation types as needed
+        # Check for ornaments
+        ornaments_elem = find_element(notation_elem, "ornaments")
+        if ornaments_elem is not None:
+            # Extract placement (for all ornaments)
+            placement_str = ornaments_elem.get("placement", "above")
+            try:
+                placement = StaffPlacement(placement_str)
+            except ValueError:
+                logger.warning(f"Unknown placement value: {placement_str}, defaulting to 'above'")
+                placement = StaffPlacement.ABOVE
+            
+            # Check for mordent
+            mordent_elem = find_element(ornaments_elem, "mordent")
+            if mordent_elem is not None:
+                notations.append(Mordent(inverted=False, placement=placement))
+                
+            # Check for inverted mordent
+            inverted_mordent_elem = find_element(ornaments_elem, "inverted-mordent")
+            if inverted_mordent_elem is not None:
+                notations.append(Mordent(inverted=True, placement=placement))
+                
+            # Check for turn
+            turn_elem = find_element(ornaments_elem, "turn")
+            if turn_elem is not None:
+                notations.append(Turn(inverted=False, delayed=False, placement=placement))
+                
+            # Check for inverted turn
+            inverted_turn_elem = find_element(ornaments_elem, "inverted-turn")
+            if inverted_turn_elem is not None:
+                notations.append(Turn(inverted=True, delayed=False, placement=placement))
+                
+            # Check for delayed turn
+            delayed_turn_elem = find_element(ornaments_elem, "delayed-turn")
+            if delayed_turn_elem is not None:
+                notations.append(Turn(inverted=False, delayed=True, placement=placement))
+                
+            # Check for delayed inverted turn
+            delayed_inverted_turn_elem = find_element(ornaments_elem, "delayed-inverted-turn")
+            if delayed_inverted_turn_elem is not None:
+                notations.append(Turn(inverted=True, delayed=True, placement=placement))
+                
+            # Check for schleifer (horizontal grace)
+            schleifer_elem = find_element(ornaments_elem, "schleifer")
+            if schleifer_elem is not None:
+                notations.append(Schleifer(placement=placement))
+                
+            # Check for trill-mark
+            trill_mark_elem = find_element(ornaments_elem, "trill-mark")
+            if trill_mark_elem is not None:
+                notations.append(TrillMark(placement=placement))
+                
+            # Check for tremolo
+            tremolo_elem = find_element(ornaments_elem, "tremolo")
+            if tremolo_elem is not None:
+                # Get tremolo type (default to 'single' if not specified)
+                tremolo_type = tremolo_elem.get("type", "single")
+                
+                # For both tremolo with type attribute and without
+                # Get the number of lines (marks) from text content
+                tremolo_text = tremolo_elem.text
+                num_lines = 3  # Default
+                if tremolo_text:
+                    try:
+                        num_lines = int(tremolo_text)
+                    except ValueError:
+                        logger.warning(f"Invalid tremolo lines value: {tremolo_text}, defaulting to 3")
+                notations.append(Tremolo(num_lines=num_lines))
         
-        return None 
+        # Check for technical notations
+        technical_elem = find_element(notation_elem, "technical")
+        if technical_elem is not None:
+            # Collect all technical notations within this single technical element
+            # This ensures we don't lose any technical notations when multiple are present
+            technical_notations = []
+            
+            # Check for up-bow
+            if find_element(technical_elem, "up-bow") is not None:
+                technical_notations.append(UpBow())
+                
+            # Check for down-bow
+            if find_element(technical_elem, "down-bow") is not None:
+                technical_notations.append(DownBow())
+                
+            # Check for open-string
+            if find_element(technical_elem, "open-string") is not None:
+                technical_notations.append(OpenString())
+                
+            # Check for harmonic
+            if find_element(technical_elem, "harmonic") is not None:
+                technical_notations.append(Harmonic())
+                
+            # Check for stopped
+            if find_element(technical_elem, "stopped") is not None:
+                technical_notations.append(Stopped())
+                
+            # Check for snap-pizzicato
+            if find_element(technical_elem, "snap-pizzicato") is not None:
+                technical_notations.append(SnapPizzicato())
+            
+            # Add all technical notations to the main list
+            notations.extend(technical_notations)
+        
+        # Return based on the number of notations found
+        if len(notations) == 0:
+            return None
+        elif len(notations) == 1:
+            return notations[0]
+        else:
+            return notations 

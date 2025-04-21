@@ -755,7 +755,24 @@ class _XMLNote(DurationalObject):
         if len(self.notations) + len(self.articulations) > 0 or self.tuplet_bracket is not None:
             # there is either a notation or an articulation, so we'll add a notations tag
             notations_el = ElementTree.Element("notations")
+            
+            # Group technical notations
+            technical_notations = []
+            non_technical_notations = []
+            
+            # First, separate technical from non-technical notations
             for notation in self.notations:
+                if isinstance(notation, ElementTree.Element):
+                    non_technical_notations.append(notation)
+                elif hasattr(notation, "__class__") and notation.__class__.__name__ == "Technical" or \
+                     (hasattr(notation, "__class__") and hasattr(notation.__class__, "__bases__") and 
+                      any(base.__name__ == "Technical" for base in notation.__class__.__bases__)):
+                    technical_notations.append(notation)
+                else:
+                    non_technical_notations.append(notation)
+            
+            # Add non-technical notations normally
+            for notation in non_technical_notations:
                 if isinstance(notation, ElementTree.Element):
                     # if it's already an element, just append it directly
                     notations_el.append(notation)
@@ -767,6 +784,13 @@ class _XMLNote(DurationalObject):
                     notations_el.append(ElementTree.Element(notation))
                 else:
                     logging.warning("Notation {} not understood".format(notation))
+            
+            # Handle technical notations specially - group them into a single technical element
+            if technical_notations:
+                technical_el = ElementTree.Element("technical")
+                for tech_notation in technical_notations:
+                    technical_el.extend(tech_notation.render_technical())
+                notations_el.append(technical_el)
 
             if self.tuplet_bracket in ("start", "both"):
                 notations_el.append(ElementTree.Element("tuplet", {"type": "start"}))
