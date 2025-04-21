@@ -12,8 +12,11 @@ import xml.etree.ElementTree as ET
 
 from pymusicxml.directions import Direction, Dynamic, MetronomeMark, TextAnnotation, Harmony, Degree
 from pymusicxml.notations import Notation, Fermata, Arpeggiate, NonArpeggiate
-from pymusicxml.enums import StaffPlacement, ArpeggiationDirection
-from pymusicxml.spanners import StartBracket, StopBracket
+from pymusicxml.enums import StaffPlacement, ArpeggiationDirection, HairpinType
+from pymusicxml.spanners import (
+    StartBracket, StopBracket, StartPedal, StopPedal, ChangePedal,
+    StartHairpin, StopHairpin, StartDashes, StopDashes
+)
 
 # Set up logging
 logger = logging.getLogger(__name__)
@@ -64,6 +67,130 @@ class DirectionsImporter:
         text_annotation = None
         
         for direction_type_elem in direction_type_elements:
+            # Check for dashes elements
+            dashes_elem = find_element(direction_type_elem, "dashes")
+            if dashes_elem is not None:
+                dashes_type = dashes_elem.get("type")
+                dashes_number = dashes_elem.get("number", "1")
+                
+                # Find previous words element for potential text annotation
+                words_elems = find_elements(direction_type_elem, "words")
+                if words_elems:
+                    words_text = words_elems[0].text
+                    if words_text:
+                        text_annotation = TextAnnotation(
+                            text=words_text,
+                            placement=placement or "above",
+                            staff=staff,
+                            voice=voice
+                        )
+                
+                if dashes_type == "start":
+                    # Get dash-length and space-length
+                    dash_length_str = dashes_elem.get("dash-length")
+                    space_length_str = dashes_elem.get("space-length")
+                    
+                    dash_length = float(dash_length_str) if dash_length_str else None
+                    space_length = float(space_length_str) if space_length_str else None
+                    
+                    return StartDashes(
+                        label=dashes_number,
+                        dash_length=dash_length,
+                        space_length=space_length,
+                        text=text_annotation,
+                        placement=placement or "above",
+                        voice=voice,
+                        staff=staff
+                    )
+                elif dashes_type == "stop":
+                    return StopDashes(
+                        label=dashes_number,
+                        text=text_annotation,
+                        placement=placement or "above",
+                        voice=voice,
+                        staff=staff
+                    )
+            
+            # Check for hairpin elements (wedge)
+            wedge_elem = find_element(direction_type_elem, "wedge")
+            if wedge_elem is not None:
+                wedge_type = wedge_elem.get("type")
+                wedge_number = wedge_elem.get("number", "1")
+                
+                # Get spread attribute
+                spread_str = wedge_elem.get("spread")
+                spread = float(spread_str) if spread_str else None
+                
+                # Get niente attribute
+                niente = wedge_elem.get("niente") == "yes"
+                
+                if wedge_type == "crescendo":
+                    return StartHairpin(
+                        hairpin_type=HairpinType.crescendo,
+                        label=wedge_number,
+                        spread=spread,
+                        placement=placement or "below",
+                        niente=niente,
+                        voice=voice,
+                        staff=staff
+                    )
+                elif wedge_type == "diminuendo":
+                    return StartHairpin(
+                        hairpin_type=HairpinType.diminuendo,
+                        label=wedge_number,
+                        spread=spread,
+                        placement=placement or "below",
+                        niente=niente,
+                        voice=voice,
+                        staff=staff
+                    )
+                elif wedge_type == "stop":
+                    return StopHairpin(
+                        label=wedge_number,
+                        spread=spread,
+                        placement=placement or "below",
+                        voice=voice,
+                        staff=staff
+                    )
+            
+            # Check for pedal elements
+            pedal_elem = find_element(direction_type_elem, "pedal")
+            if pedal_elem is not None:
+                pedal_type = pedal_elem.get("type")
+                pedal_number = pedal_elem.get("number", "1")
+                
+                # Get sign and line attributes
+                sign = pedal_elem.get("sign") != "no"  # Default is yes for sign
+                line = pedal_elem.get("line") != "no"  # Default is yes for line
+                
+                if pedal_type == "start":
+                    return StartPedal(
+                        label=pedal_number,
+                        sign=sign,
+                        line=line,
+                        placement=placement or "below",
+                        voice=voice,
+                        staff=staff
+                    )
+                elif pedal_type == "stop":
+                    return StopPedal(
+                        label=pedal_number,
+                        sign=sign,
+                        line=line,
+                        placement=placement or "below",
+                        voice=voice,
+                        staff=staff
+                    )
+                elif pedal_type == "change":
+                    return ChangePedal(
+                        label=pedal_number,
+                        sign=sign,
+                        line=line,
+                        placement=placement or "below",
+                        voice=voice,
+                        staff=staff
+                    )
+            
             # Check for dynamics
             dynamics_elem = find_element(direction_type_elem, "dynamics")
             if dynamics_elem is not None:

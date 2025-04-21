@@ -15,8 +15,10 @@ from pymusicxml.score_components import (
     Pitch, Duration, Notehead, BeamedGroup, BarRestDuration, Tuplet
 )
 from pymusicxml.notations import (
-    StartGliss, StopGliss, StartMultiGliss, StopMultiGliss
+    StartGliss, StopGliss, StartMultiGliss, StopMultiGliss,
+    TrillMark
 )
+from pymusicxml.spanners import StartSlur, StopSlur, StartTrill, StopTrill
 
 # Set up logging
 logger = logging.getLogger(__name__)
@@ -143,6 +145,32 @@ class MusicalElementsImporter:
         if notations_elem is None:
             return notations
             
+        # Handle ornaments (trill)
+        ornaments_elem = find_element(notations_elem, "ornaments")
+        if ornaments_elem is not None:
+            # Handle trill-mark
+            trill_mark_elem = find_element(ornaments_elem, "trill-mark")
+            if trill_mark_elem is not None:
+                notations.append(TrillMark())
+            
+            # Handle wavy-line (for trill spans)
+            wavy_line_elems = find_elements(ornaments_elem, "wavy-line") or []
+            for wavy_line in wavy_line_elems:
+                wavy_type = wavy_line.get("type")
+                label = wavy_line.get("number", "1")
+                placement = wavy_line.get("placement", "above")
+                
+                # Check for accidental in trill
+                accidental = None
+                accidental_mark_elem = find_element(ornaments_elem, "accidental-mark")
+                if accidental_mark_elem is not None and accidental_mark_elem.text:
+                    accidental = accidental_mark_elem.text
+                
+                if wavy_type == "start":
+                    notations.append(StartTrill(label=label, placement=placement, accidental=accidental))
+                elif wavy_type == "stop":
+                    notations.append(StopTrill(label=label, placement=placement))
+        
         # Handle glissandos
         glissando_elems = find_elements(notations_elem, "glissando") or []
         slide_elems = find_elements(notations_elem, "slide") or []
@@ -156,6 +184,19 @@ class MusicalElementsImporter:
                 notations.append(StartGliss(number=number))
             elif gliss_type == "stop":
                 notations.append(StopGliss(number=number))
+        
+        # Handle slurs
+        slur_elems = find_elements(notations_elem, "slur") or []
+        
+        # Process all slur elements
+        for slur in slur_elems:
+            slur_type = slur.get("type")
+            label = slur.get("number", "1")
+            
+            if slur_type == "start":
+                notations.append(StartSlur(label=label))
+            elif slur_type == "stop":
+                notations.append(StopSlur(label=label))
         
         # TODO: Add more notation types (articulations, ornaments, technical, etc.)
         
