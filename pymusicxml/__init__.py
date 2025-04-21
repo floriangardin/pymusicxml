@@ -39,5 +39,9 @@ from pymusicxml.enums import *
 from pymusicxml.importer import import_musicxml, MusicXMLImporter
 import importlib.metadata
 
-#__version__ = importlib.metadata.version('pymusicxml')
-#__author__ = importlib.metadata.metadata('pymusicxml')['Author']
+try:
+    __version__ = importlib.metadata.version('pymusicxml')
+    __author__ = importlib.metadata.metadata('pymusicxml')['Author']
+except Exception:
+    __version__ = '0.0.0'
+    __author__ = ''
