@@ -157,18 +157,6 @@ def perform_roundtrip_test(input_file):
         if output_path.exists():
             output_path.unlink()
 
-# Test cases
-def test_roundtrip_main_musicxml():
-    """Test round-trip compatibility with the main.musicxml test file."""
-    input_file = Path("tests/data/main.musicxml")
-    success, message = perform_roundtrip_test(input_file)
-    
-    if not success:
-        logger.error(message)
-    
-    # For now, we'll skip this test until we can resolve the XML comparison issues
-    pytest.skip("Skipping exact XML comparison test - needs more sophisticated XML comparison")
-    assert success, message
 
 # More advanced round-trip comparison function
 def perform_detailed_roundtrip_analysis(input_file, output_dir=None):

@@ -250,6 +250,44 @@ class MusicalElementsImporter:
         return ties
     
     @staticmethod
+    def import_articulations(note_elem, find_element, find_elements) -> List[str]:
+        """
+        Import articulations from a note element.
+        
+        Args:
+            note_elem: The note element
+            find_element: Method to find child elements
+            find_elements: Method to find multiple child elements
+            
+        Returns:
+            A list of articulation names
+        """
+        articulations = []
+        notations_elem = find_element(note_elem, "notations")
+        
+        if notations_elem is None:
+            return articulations
+            
+        # Find articulations element
+        articulations_elem = find_element(notations_elem, "articulations")
+        if articulations_elem is None:
+            return articulations
+            
+        # Common articulations in MusicXML
+        articulation_types = [
+            "accent", "strong-accent", "staccato", "tenuto", "detached-legato", 
+            "staccatissimo", "spiccato", "scoop", "plop", "doit", "falloff", 
+            "breath-mark", "caesura", "stress", "unstress"
+        ]
+        
+        # Check for each articulation type
+        for art_type in articulation_types:
+            if find_element(articulations_elem, art_type) is not None:
+                articulations.append(art_type)
+                
+        return articulations
+    
+    @staticmethod
     def import_note(note_elem, find_element, get_text, find_elements) -> Optional[Union[Note, Rest, GraceNote]]:
         """
         Import a note element.
@@ -340,6 +378,9 @@ class MusicalElementsImporter:
             # Import notations
             notations = MusicalElementsImporter.import_notations(note_elem, find_element, find_elements)
             
+            # Import articulations
+            articulations = MusicalElementsImporter.import_articulations(note_elem, find_element, find_elements)
+            
             # Import notehead
             notehead = MusicalElementsImporter.import_notehead(note_elem, find_element, get_text)
             
@@ -360,6 +401,7 @@ class MusicalElementsImporter:
                     duration=duration,
                     ties=tie_value,
                     notations=notations,
+                    articulations=articulations,
                     notehead=notehead,
                     directions=directions,
                     stemless=stemless
@@ -380,6 +422,7 @@ class MusicalElementsImporter:
                     duration=duration,
                     ties=tie_value,
                     notations=notations,
+                    articulations=articulations,
                     notehead=notehead,
                     directions=directions,
                     stemless=stemless
@@ -469,6 +512,10 @@ class MusicalElementsImporter:
             if not (isinstance(notation, StartGliss) or isinstance(notation, StopGliss)):
                 notations.append(notation)
         
+        # Import articulations from the first note
+        # For chords, articulations are typically only on the first note
+        articulations = MusicalElementsImporter.import_articulations(first_note_elem, find_element, find_elements)
+        
         # Import noteheads from multiple notes
         # Chord takes noteheads, not notehead
         noteheads = []
@@ -505,6 +552,7 @@ class MusicalElementsImporter:
                 duration=duration,
                 ties=tie_value,
                 notations=notations,
+                articulations=articulations,
                 noteheads=noteheads if noteheads else None,
                 directions=directions,
                 stemless=stemless,
@@ -519,11 +567,13 @@ class MusicalElementsImporter:
                 
             return grace_chord
         else:
+            # This is a regular chord
             chord = Chord(
                 pitches=pitches,
                 duration=duration,
                 ties=tie_value,
                 notations=notations,
+                articulations=articulations,
                 noteheads=noteheads if noteheads else None,
                 directions=directions,
                 stemless=stemless
