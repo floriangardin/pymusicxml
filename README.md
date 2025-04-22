@@ -19,11 +19,11 @@ See the examples folder for examples of explicitly created and exported scores, 
 created and exported scores.
 
 ```python
-from pymusicxml import Score, Part, Measure, Note, Pitch
+from pymusicxml import *
 
 # Create a simple score
 score = Score(title="Hello World")
-part = Part(name="Piano")
+part = Part(part_name="Piano")
 score.append(part)
 
 # Add a measure with some notes
@@ -31,6 +31,7 @@ measure = Measure()
 measure.append(Note(pitch=Pitch("C", 4), duration=1))
 measure.append(Note(pitch=Pitch("E", 4), duration=1))
 measure.append(Note(pitch=Pitch("G", 4), duration=1))
+measure.append(Rest(duration=1))
 part.append(measure)
 
 # Export to MusicXML
@@ -59,24 +60,6 @@ score.export_to_file("modified_score.musicxml")
 ```
 
 See the `examples/import` directory for more detailed examples of importing and modifying MusicXML files.
-
-## Features
-
-_pymusicxml_ supports a wide range of MusicXML features, including:
-
-- Score metadata (title, composer, etc.)
-- Parts and part groups
-- Measures and measure attributes
-- Notes, rests, and chords
-- Beamed groups and tuplets
-- Clefs, time signatures, and key signatures
-- Various notations (slurs, glissandos, trills, etc.)
-- Dynamics and other musical directions
-- Technical markings and ornaments
-
-## Documentation
-
-For detailed documentation, see the [docs](docs/) directory.
 
 ## Development
 
