@@ -50,14 +50,11 @@ class DirectionsImporter:
         """
         Import a direction element.
         
-        Args:
-            direction_elem: The direction element
-            find_element: Method to find child elements
-            get_text: Method to get text content
-            find_elements: Method to find multiple child elements
-            
-        Returns:
-            A Direction object or None if not recognized
+        :param direction_elem: The direction element
+        :param find_element: Method to find child elements
+        :param get_text: Method to get text content
+        :param find_elements: Method to find multiple child elements
+        :returns: A Direction object or None if not recognized
         """
         # Get placement
         placement_str = direction_elem.get("placement")
@@ -452,14 +449,11 @@ class NotationsImporter:
         """
         Import a notation element.
         
-        Args:
-            notation_elem: The notation element
-            find_element: Method to find child elements
-            get_text: Method to get text content
-            find_elements: Method to find multiple child elements
-            
-        Returns:
-            A Notation object, a list of Notation objects, or None if not recognized
+        :param notation_elem: The notation element
+        :param find_element: Method to find child elements
+        :param get_text: Method to get text content
+        :param find_elements: Method to find multiple child elements
+        :returns: A Notation object, a list of Notation objects, or None if not recognized
         """
         notations = []
         

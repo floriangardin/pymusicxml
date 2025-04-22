@@ -50,8 +50,7 @@ class ScoreImporter(MusicXMLImporter):
         """
         Import the MusicXML file as a Score object.
         
-        Returns:
-            A Score object representing the imported MusicXML file
+        :returns: A Score object representing the imported MusicXML file
         """
         if self.root.tag.endswith('score-partwise'):
             return self._import_partwise_score()
@@ -66,8 +65,7 @@ class ScoreImporter(MusicXMLImporter):
         """
         Import a partwise MusicXML score.
         
-        Returns:
-            A Score object representing the imported MusicXML file
+        :returns: A Score object representing the imported MusicXML file
         """
         # Extract metadata
         work = self._find_element(self.root, "work")
@@ -124,11 +122,8 @@ class ScoreImporter(MusicXMLImporter):
         """
         Import the part-list element.
         
-        Args:
-            part_list_elem: The part-list element
-            
-        Returns:
-            A list of Part and PartGroup objects
+        :param part_list_elem: The part-list element
+        :returns: A list of Part and PartGroup objects
         """
         parts_and_groups = []
         part_elems = {}  # Map part IDs to their elements
@@ -204,13 +199,10 @@ class ScoreImporter(MusicXMLImporter):
         """
         Import a part element.
         
-        Args:
-            part_elem: The part element
-            part_name: The name of the part
-            part_id: The ID of the part
-            
-        Returns:
-            A Part object
+        :param part_elem: The part element
+        :param part_name: The name of the part
+        :param part_id: The ID of the part
+        :returns: A Part object
         """
         measures = []
         current_divisions = None
@@ -240,12 +232,9 @@ class ScoreImporter(MusicXMLImporter):
         """
         Import a measure element.
         
-        Args:
-            measure_elem: The measure element
-            inherited_divisions: The divisions value inherited from previous measures
-            
-        Returns:
-            A Measure object
+        :param measure_elem: The measure element
+        :param inherited_divisions: The divisions value inherited from previous measures
+        :returns: A Measure object
         """
         
         # Default values
@@ -460,11 +449,8 @@ class ScoreImporter(MusicXMLImporter):
         """
         Import the contents of a measure (notes, rests, chords, etc.).
         
-        Args:
-            measure_elem: The measure element
-            
-        Returns:
-            A list of musical elements organized by voice
+        :param measure_elem: The measure element
+        :returns: A list of musical elements organized by voice
         """
         # Use the new method to identify and process groups
         all_elements = MusicalElementsImporter.identify_groups_in_measure(
@@ -501,11 +487,8 @@ def import_musicxml(file_path: Union[str, Path]) -> Score:
     """
     Import a MusicXML file and return a Score object.
     
-    Args:
-        file_path: Path to the MusicXML file to import
-        
-    Returns:
-        A Score object representing the imported MusicXML file
+    :param file_path: Path to the MusicXML file to import
+    :returns: A Score object representing the imported MusicXML file
     """
     importer = ScoreImporter(file_path)
     return importer.import_score() 
