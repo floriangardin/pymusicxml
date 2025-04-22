@@ -73,21 +73,50 @@ class ScoreImporter(MusicXMLImporter):
         work = self._find_element(self.root, "work")
         title = self._get_text(work, "work-title") if work is not None else None
         
+        # Check for movement-title if work-title is not found
+        if title is None:
+            movement_title = self._find_element(self.root, "movement-title")
+            if movement_title is not None and movement_title.text:
+                title = movement_title.text
+        
         identification = self._find_element(self.root, "identification")
         composer = None
+        copyright = None
         if identification is not None:
             creator_elements = self._find_elements(identification, "creator")
             for creator in creator_elements:
                 if creator.get("type") == "composer":
                     composer = creator.text
                     break
+            
+            # Get copyright information from identification/rights
+            rights_element = self._find_element(identification, "rights")
+            if rights_element is not None and rights_element.text:
+                copyright = rights_element.text
+        
+        # Look for credit elements that might contain title, composer or copyright info
+        credit_elements = self._find_elements(self.root, "credit")
+        for credit in credit_elements:
+            credit_type_elem = self._find_element(credit, "credit-type")
+            credit_words_elem = self._find_element(credit, "credit-words")
+            
+            if credit_type_elem is not None and credit_words_elem is not None and credit_words_elem.text:
+                # If we find a rights credit, use it for copyright info
+                if credit_type_elem.text == "rights" and copyright is None:
+                    copyright = credit_words_elem.text
+                # If we find a title credit and title is still not set, use it
+                elif credit_type_elem.text == "title" and title is None:
+                    title = credit_words_elem.text
+                # If we find a composer credit and composer is still not set, use it
+                elif credit_type_elem.text == "composer" and composer is None:
+                    composer = credit_words_elem.text
         
         # Import parts and part groups
         part_list_elem = self._find_element(self.root, "part-list", required=True)
         parts_and_groups = self._import_part_list(part_list_elem)
         
         # Create score
-        score = Score(contents=parts_and_groups, title=title, composer=composer)
+        score = Score(contents=parts_and_groups, title=title, composer=composer, copyright=copyright)
         logger.info(f"Successfully imported score: {title}")
         return score
     

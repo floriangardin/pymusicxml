@@ -343,5 +343,124 @@ def test_import_mxl_file():
         assert score.parts[0].part_name == "Test Part"
 
 
+def test_import_score_with_credits():
+    """Test importing a score with title, composer, and copyright information."""
+    
+    # Create a temporary MusicXML file with title, composer, and copyright
+    xml_content = """<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE score-partwise PUBLIC "-//Recordare//DTD MusicXML 4.0 Partwise//EN" "http://www.musicxml.org/dtds/partwise.dtd">
+<score-partwise version="4.0">
+  <movement-title>Test Score Title</movement-title>
+  <identification>
+    <creator type="composer">Test Composer Name</creator>
+    <rights>Copyright © 2025 Test Copyright</rights>
+    <encoding>
+      <software>TestSoftware</software>
+      <encoding-date>2025-01-01</encoding-date>
+    </encoding>
+  </identification>
+  <credit page="1">
+    <credit-type>title</credit-type>
+    <credit-words default-x="850" default-y="2106" justify="center" valign="top" font-size="22">Test Score Title</credit-words>
+  </credit>
+  <credit page="1">
+    <credit-type>composer</credit-type>
+    <credit-words default-x="1645" default-y="1968" justify="right" valign="bottom" font-size="10">Test Composer Name</credit-words>
+  </credit>
+  <credit page="1">
+    <credit-type>rights</credit-type>
+    <credit-words default-x="850" default-y="94" justify="center" valign="bottom">Copyright © 2025 Test Copyright</credit-words>
+  </credit>
+  <part-list>
+    <score-part id="P1">
+      <part-name>Test Part</part-name>
+    </score-part>
+  </part-list>
+  <part id="P1">
+    <measure number="1">
+      <attributes>
+        <divisions>1</divisions>
+        <key>
+          <fifths>0</fifths>
+        </key>
+        <time>
+          <beats>4</beats>
+          <beat-type>4</beat-type>
+        </time>
+        <clef>
+          <sign>G</sign>
+          <line>2</line>
+        </clef>
+      </attributes>
+      <note>
+        <rest/>
+        <duration>4</duration>
+        <voice>1</voice>
+        <type>whole</type>
+      </note>
+    </measure>
+  </part>
+</score-partwise>
+"""
+    
+    # Create temp file
+    temp_file = os.path.join(tempfile.gettempdir(), "test_credits.musicxml")
+    with open(temp_file, 'w') as f:
+        f.write(xml_content)
+    
+    try:
+        # Import the score
+        score = import_musicxml(temp_file)
+        
+        # Test score metadata
+        assert score.title == "Test Score Title"
+        assert score.composer == "Test Composer Name"
+        assert score.copyright == "Copyright © 2025 Test Copyright"
+        
+        # Export to a new file
+        export_file = os.path.join(tempfile.gettempdir(), "test_credits_exported.musicxml")
+        score.export_to_file(export_file)
+        
+        # Re-import the exported file to verify credits were preserved
+        exported_score = import_musicxml(export_file)
+        
+        # Verify metadata in re-imported score
+        assert exported_score.title == "Test Score Title"
+        assert exported_score.composer == "Test Composer Name"
+        assert exported_score.copyright == "Copyright © 2025 Test Copyright"
+        
+        # Verify credit elements in the XML
+        tree = ET.parse(export_file)
+        root = tree.getroot()
+        
+        # Check for identification/rights
+        rights_elem = root.find(".//identification/rights")
+        assert rights_elem is not None
+        assert rights_elem.text == "Copyright © 2025 Test Copyright"
+        
+        # Check for credit elements
+        credit_elements = root.findall(".//credit")
+        assert len(credit_elements) >= 3
+        
+        # Check for rights credit
+        found_rights_credit = False
+        for credit in credit_elements:
+            credit_type = credit.find("credit-type")
+            if credit_type is not None and credit_type.text == "rights":
+                credit_words = credit.find("credit-words")
+                assert credit_words is not None
+                assert credit_words.text == "Copyright © 2025 Test Copyright"
+                found_rights_credit = True
+        
+        assert found_rights_credit, "Copyright credit element not found in exported XML"
+        
+    finally:
+        # Clean up
+        if os.path.exists(temp_file):
+            os.unlink(temp_file)
+        if os.path.exists(export_file):
+            os.unlink(export_file)
+
+
 if __name__ == "__main__":
     pytest.main(["-xvs", __file__]) 

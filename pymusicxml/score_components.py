@@ -2146,12 +2146,14 @@ class Score(MusicXMLComponent, MusicXMLContainer):
     :param contents: list of parts and part groups included in this score
     :param title: title of the score
     :param composer: name of the composer
+    :param copyright: copyright statement for the score (displayed at bottom of page)
     """
 
-    def __init__(self, contents: Sequence[Part | PartGroup] = None, title: str = None, composer: str = None):
+    def __init__(self, contents: Sequence[Part | PartGroup] = None, title: str = None, composer: str = None, copyright: str = None):
         super().__init__(contents=contents, allowed_types=(Part, PartGroup))
         self.title = title
         self.composer = composer
+        self.copyright = copyright
 
     @property
     def parts(self) -> Sequence[Part]:
@@ -2176,9 +2178,45 @@ class Score(MusicXMLComponent, MusicXMLContainer):
         id_el = ElementTree.SubElement(score_element, "identification")
         if self.composer is not None:
             ElementTree.SubElement(id_el, "creator", {"type": "composer"}).text = self.composer
+        if self.copyright is not None:
+            ElementTree.SubElement(id_el, "rights").text = self.copyright
         encoding_el = ElementTree.SubElement(id_el, "encoding")
         ElementTree.SubElement(encoding_el, "encoding-date").text = str(datetime.date.today())
         ElementTree.SubElement(encoding_el, "software").text = "pymusicxml"
+        
+        # Add credit elements for title, composer, and copyright
+        if self.title is not None:
+            credit_el = ElementTree.SubElement(score_element, "credit", {"page": "1"})
+            ElementTree.SubElement(credit_el, "credit-type").text = "title"
+            ElementTree.SubElement(credit_el, "credit-words", {
+                "default-x": "850",
+                "default-y": "2106",
+                "justify": "center",
+                "valign": "top",
+                "font-size": "22"
+            }).text = self.title
+        
+        if self.composer is not None:
+            credit_el = ElementTree.SubElement(score_element, "credit", {"page": "1"})
+            ElementTree.SubElement(credit_el, "credit-type").text = "composer"
+            ElementTree.SubElement(credit_el, "credit-words", {
+                "default-x": "1645",
+                "default-y": "1968",
+                "justify": "right",
+                "valign": "bottom",
+                "font-size": "10"
+            }).text = self.composer
+        
+        if self.copyright is not None:
+            credit_el = ElementTree.SubElement(score_element, "credit", {"page": "1"})
+            ElementTree.SubElement(credit_el, "credit-type").text = "rights"
+            ElementTree.SubElement(credit_el, "credit-words", {
+                "default-x": "850",
+                "default-y": "94",
+                "justify": "center",
+                "valign": "bottom"
+            }).text = self.copyright
+        
         part_list_el = ElementTree.SubElement(score_element, "part-list")
         for part_or_part_group in self.contents:
             part_list_el.extend(part_or_part_group.render_part_list_entry())
