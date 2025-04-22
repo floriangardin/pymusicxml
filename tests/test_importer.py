@@ -7,11 +7,14 @@ import pytest
 from pathlib import Path
 import tempfile
 import xml.etree.ElementTree as ET
+import zipfile
+import shutil
 
 from pymusicxml import (
     Score, Part, PartGroup, Measure, Clef,
     Pitch, Duration, Note, Chord, Rest, import_musicxml
 )
+from pymusicxml.importers.base_importer import MusicXMLImporter
 
 
 def test_import_empty_score():
@@ -253,6 +256,91 @@ def test_basic_import_export():
     finally:
         # Clean up
         os.unlink(temp_file)
+
+
+def test_import_mxl_file():
+    """Test importing a compressed MusicXML (.mxl) file."""
+    # Create a temporary directory for our test
+    with tempfile.TemporaryDirectory() as temp_dir:
+        # Create a simple MusicXML file
+        xml_content = """<?xml version="1.0" encoding="UTF-8"?>
+        <!DOCTYPE score-partwise PUBLIC "-//Recordare//DTD MusicXML 3.0 Partwise//EN" "http://www.musicxml.org/dtds/partwise.dtd">
+        <score-partwise>
+            <work>
+                <work-title>Test MXL Score</work-title>
+            </work>
+            <identification>
+                <creator type="composer">Test Composer</creator>
+            </identification>
+            <part-list>
+                <score-part id="P1">
+                    <part-name>Test Part</part-name>
+                </score-part>
+            </part-list>
+            <part id="P1">
+                <measure number="1">
+                    <attributes>
+                        <divisions>4</divisions>
+                        <time>
+                            <beats>4</beats>
+                            <beat-type>4</beat-type>
+                        </time>
+                        <key>
+                            <fifths>0</fifths>
+                            <mode>major</mode>
+                        </key>
+                    </attributes>
+                </measure>
+            </part>
+        </score-partwise>
+        """
+        
+        # Create paths for our files
+        xml_path = os.path.join(temp_dir, "score.xml")
+        mxl_path = os.path.join(temp_dir, "score.mxl")
+        
+        # Write the XML content to a file
+        with open(xml_path, 'w') as f:
+            f.write(xml_content)
+        
+        # Create META-INF directory and container.xml file
+        meta_inf_dir = os.path.join(temp_dir, "META-INF")
+        os.makedirs(meta_inf_dir, exist_ok=True)
+        
+        container_content = """<?xml version="1.0" encoding="UTF-8"?>
+        <container>
+            <rootfiles>
+                <rootfile full-path="score.xml" media-type="application/vnd.recordare.musicxml+xml"/>
+            </rootfiles>
+        </container>
+        """
+        
+        with open(os.path.join(meta_inf_dir, "container.xml"), 'w') as f:
+            f.write(container_content)
+        
+        # Create the MXL file (ZIP archive)
+        with zipfile.ZipFile(mxl_path, 'w') as zipf:
+            # Add the score.xml file
+            zipf.write(xml_path, arcname="score.xml")
+            # Add the META-INF/container.xml file
+            zipf.write(os.path.join(meta_inf_dir, "container.xml"), 
+                      arcname="META-INF/container.xml")
+        
+        # Now test our MXL importer
+        importer = MusicXMLImporter(mxl_path)
+        
+        # Check that the root element was extracted correctly
+        assert importer.root is not None
+        assert importer.root.tag == "score-partwise"
+        
+        # Test importing the score using the import_musicxml function
+        score = import_musicxml(mxl_path)
+        
+        # Verify score details
+        assert score.title == "Test MXL Score"
+        assert score.composer == "Test Composer"
+        assert len(score.parts) == 1
+        assert score.parts[0].part_name == "Test Part"
 
 
 if __name__ == "__main__":

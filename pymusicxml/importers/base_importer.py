@@ -25,6 +25,9 @@ import xml.etree.ElementTree as ET
 from typing import Dict, Optional, Sequence, Union, Any
 from pathlib import Path
 import re
+import zipfile
+import tempfile
+import os
 
 # Set up logging
 logger = logging.getLogger(__name__)
@@ -51,6 +54,57 @@ class MusicXMLImporter:
         self._parse_file()
         
     def _parse_file(self):
+        if self.file_path.suffix in [".mxl"]:
+            self.parse_mxl()
+        elif self.file_path.suffix in [".musicxml", ".xml"]:
+            self.parse_musicxml()
+        else:
+            raise ValueError(f"Unsupported file extension: {self.file_path.suffix}")
+
+    def parse_mxl(self):
+        """Parse the compressed MusicXML file and extract the root element."""
+        try:
+            # Create a temporary directory to extract files
+            with tempfile.TemporaryDirectory() as temp_dir:
+                # Extract the MXL file (which is a ZIP archive)
+                with zipfile.ZipFile(self.file_path, 'r') as zip_ref:
+                    zip_ref.extractall(temp_dir)
+                
+                # Look for container.xml which points to the main MusicXML file
+                container_path = os.path.join(temp_dir, "META-INF", "container.xml")
+                if os.path.exists(container_path):
+                    # Parse container.xml to find the main MusicXML file
+                    container_tree = ET.parse(container_path)
+                    container_root = container_tree.getroot()
+                    
+                    # Find the rootfile element which contains the path to the main MusicXML file
+                    rootfile_element = container_root.find(".//*[@full-path]")
+                    if rootfile_element is not None:
+                        main_file_path = rootfile_element.get("full-path")
+                        musicxml_path = os.path.join(temp_dir, main_file_path)
+                    else:
+                        raise ValueError("Could not find main MusicXML file in container.xml")
+                else:
+                    # If container.xml doesn't exist, look for a .musicxml or .xml file
+                    xml_files = [f for f in os.listdir(temp_dir) 
+                                if f.endswith('.musicxml') or f.endswith('.xml')]
+                    if xml_files:
+                        musicxml_path = os.path.join(temp_dir, xml_files[0])
+                    else:
+                        raise ValueError("Could not find MusicXML file in the archive")
+                
+                # Parse the main MusicXML file
+                tree = ET.parse(musicxml_path)
+                self.root = tree.getroot()
+                # Extract namespaces if present
+                self._extract_namespaces()
+                logger.info(f"Successfully parsed compressed MusicXML file: {self.file_path}")
+        except Exception as e:
+            logger.error(f"Failed to parse compressed MusicXML file: {self.file_path}")
+            logger.error(f"Error: {str(e)}")
+            raise
+            
+    def parse_musicxml(self):
         """Parse the MusicXML file and extract the root element."""
         try:
             tree = ET.parse(self.file_path)

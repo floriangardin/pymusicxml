@@ -44,7 +44,16 @@ Score([
                 ], (5, 4)),
                 Note("f4", 2, directions=TextAnnotation("with gusto!")),
                 Rest(1)
-            ], clef="mezzo-soprano", barline="end", key="d-flat, f#, gx, cbb")
+            ], clef="mezzo-soprano", barline="end", key="d-flat, f#, gx, cbb"),
+            Measure([
+                Note("e5", 1, directions=[StartHairpin("crescendo")]),
+                Note("g5", 1, directions=[StartDashes(text="sim.")], notations=[TrillMark()]),
+                Note("f5", 1, directions=[StopDashes(), StopHairpin()], notations=[StartTrill()]),
+                Note("d5", 1, notations=[StopTrill()])
+            ]),
+            Measure([
+                Rest(4)
+            ])
         ]),
         Part("Bb Clarinet", [
             Measure([
@@ -65,6 +74,58 @@ Score([
                 ]),
                 Chord(["Cs4", "Ab4"], 1.0, directions=[StopBracket(line_end="down")]),
                 Rest(1.0)
+            ], barline="end"),
+            Measure([
+                Note("a4", 1, directions=[StartHairpin("diminuendo")]),
+                BeamedGroup([
+                    Note("b4", 0.5, notations=[StartSlur()]),
+                    Note("c5", 0.5),
+                    Note("d5", 0.5),
+                    Note("e5", 0.5, notations=[StopSlur()])
+                ]),
+                Note("d5", 0.5, directions=[StopHairpin()], notations=[StartGliss(3)]),
+                Note("g5", 0.5, notations=[StopGliss(3)])
+            ]),
+            Measure([
+                Rest(4)
+            ])
+        ]),
+        Part("Violin", [
+            Measure([
+                Note("e5", 1, notations=[Mordent()]),
+                Note("g5", 1, notations=[Turn()]),
+                Note("a5", 1, notations=[Schleifer()]),
+                Note("d5", 1, notations=[Tremolo(3)])
+            ], time_signature=(4, 4)),
+            Measure([
+                BeamedGroup([
+                    Note("a4", 0.5, notations=[UpBow()]),
+                    Note("b4", 0.5, notations=[DownBow()]),
+                    Note("c5", 0.5, notations=[UpBow()]),
+                    Note("d5", 0.5, notations=[DownBow()])
+                ]),
+                Note("e5", 1, notations=[Harmonic()]),
+                Note("a4", 1, notations=[OpenString()]),
+            ], barline="end"),
+            Measure([
+                Chord(["e4", "g4", "c5"], 1, notations=[Arpeggiate()]),
+                Chord(["f4", "a4", "d5"], 1, notations=[NonArpeggiate()]),
+                BeamedGroup([
+                    Note("g4", 0.5, notations=[Tremolo(2)]),
+                    Note("a4", 0.5, notations=[Tremolo(2)])
+                ]),
+                Note("b4", 1, notations=[Harmonic(), UpBow()])
+            ]),
+            Measure([
+                BeamedGroup([
+                    Note("c5", 0.5, notations=[Harmonic(), OpenString()]),
+                    Note("d5", 0.5, notations=[DownBow()]),
+                    Note("e5", 0.5, notations=[UpBow()]),
+                    Note("f5", 0.5, notations=[DownBow(), Tremolo(1)])
+                ]),
+                Chord(["g4", "b4", "d5"], 0.5, notations=[Arpeggiate(), Mordent()]),
+                Chord(["a4", "c5", "e5"], 0.5, notations=[NonArpeggiate(), Turn()]),
+                Note("g5", 1, notations=[Schleifer(), OpenString()])
             ], barline="end")
         ])
     ]),
@@ -90,6 +151,24 @@ Score([
                 Note("Eb3", 0.5, directions=StopPedal()),
                 Rest(0.5)
             ]
+        ], barline="end"),
+        Measure([
+            Note("C3", 1, directions=[StartPedal()]),
+            BeamedGroup([
+                Note("G3", 0.5, directions=[StartDashes(text="tenuto")]),
+                Note("F3", 0.5),
+                Note("E3", 0.5),
+                Note("D3", 0.5, directions=[StopDashes()])
+            ]),
+            Chord(["C3", "G3"], 0.5, directions=[ChangePedal()]),
+            Note("B2", 0.5, directions=[StartHairpin("crescendo")])
+        ]),
+        Measure([
+            Note("A2", 1, directions=[StopHairpin()]),
+            Chord(["G2", "D3", "G3"], 1, notations=[StartMultiGliss((1, None, 2))]),
+            Chord(["E2", "B2", "E3"], 1, notations=[StopMultiGliss((1, None, 2))]),
+            Note("C2", 1, directions=[StopPedal()])
         ], barline="end")
     ])
 ], title="Directly Created MusicXML", composer="HTMLvis").export_to_file("DirectExampleAllFeatures.musicxml")
+

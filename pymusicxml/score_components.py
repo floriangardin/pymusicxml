@@ -19,7 +19,7 @@ Module containing all of the classes representing the hierarchy of a musical sco
 #  ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++  #
 
 from __future__ import annotations
-from typing import MutableSequence, Sequence, Type, Iterator, Any
+from typing import MutableSequence, Sequence, Type, Iterator, Any, Union
 from pymusicxml.enums import StaffPlacement
 from ._utilities import _least_common_multiple, _is_power_of_two, _escape_split, get_average_square_correlation
 from xml.etree import ElementTree
@@ -1671,7 +1671,7 @@ class Measure(MusicXMLComponent, MusicXMLContainer):
                  clef: Clef | str | tuple = None, barline: str = None,
                  staves: str = None, number: int = 1,
                  directions_with_displacements: Sequence[tuple[Direction, float]] = (),
-                 transpose: Transpose | None = None):
+                 transpose: Transpose | None = None, original_divisions: Union[int, float] = None):
         super().__init__(contents=contents, allowed_types=(Note, Rest, Chord, BarRest, BeamedGroup,
                                                            Tuplet, type(None), Sequence))
         assert hasattr(self.contents, '__len__') and all(
@@ -1692,6 +1692,7 @@ class Measure(MusicXMLComponent, MusicXMLContainer):
         self.barline = barline
         self.staves = staves
         self.transpose = transpose
+        self.original_divisions = original_divisions
 
         self.directions_with_displacements = directions_with_displacements
 
@@ -1812,24 +1813,28 @@ class Measure(MusicXMLComponent, MusicXMLContainer):
 
         attributes_el = ElementTree.SubElement(measure_element, "attributes")
 
-        num_beat_divisions = _least_common_multiple(*[x.min_denominator() for x in self.leaves()])
+        # Use original_divisions if available, otherwise calculate it from notes
+        if self.original_divisions is not None:
+            num_beat_divisions = self.original_divisions
+        else:
+            num_beat_divisions = _least_common_multiple(*[x.min_denominator() for x in self.leaves()])
 
-        if len(self.directions_with_displacements) > 0:
-            # if we're using independently placed directions, then we try to find a denominator that accommodates
-            # that as precisely as possible this means
-            ideal_division = _least_common_multiple(self._get_beat_division_for_directions(), num_beat_divisions)
-            if ideal_division <= 1024:
-                num_beat_divisions = ideal_division
-            else:
-                # Just in case the ideal division is totally outrageous, we just multiply the division
-                # by two repeatedly until we are about to go over 1024
-                num_beat_divisions *= max(1, 2 ** int(math.log2(1024 / num_beat_divisions)))
+            if len(self.directions_with_displacements) > 0:
+                # if we're using independently placed directions, then we try to find a denominator that accommodates
+                # that as precisely as possible this means
+                ideal_division = _least_common_multiple(self._get_beat_division_for_directions(), num_beat_divisions)
+                if ideal_division <= 1024:
+                    num_beat_divisions = ideal_division
+                else:
+                    # Just in case the ideal division is totally outrageous, we just multiply the division
+                    # by two repeatedly until we are about to go over 1024
+                    num_beat_divisions *= max(1, 2 ** int(math.log2(1024 / num_beat_divisions)))
 
         for note in self.leaves():
             note.divisions = num_beat_divisions
 
         divisions_el = ElementTree.SubElement(attributes_el, "divisions")
-        divisions_el.text = str(num_beat_divisions)
+        divisions_el.text = str(int(num_beat_divisions) if num_beat_divisions == int(num_beat_divisions) else num_beat_divisions)
 
         if self.key is not None:
             attributes_el.extend(KeySignature.parse(self.key).render())
@@ -1991,8 +1996,7 @@ class Part(MusicXMLComponent, MusicXMLContainer):
         part_copy = deepcopy(self)
         Part._validate_spanner_numbers(part_copy)
         part_element = ElementTree.Element("part", {"id": "P{}".format(part_copy.part_id)})
-        for i, measure in enumerate(part_copy.measures):
-            measure.number = i + 1
+        for measure in part_copy.measures:
             part_element.extend(measure.render())
         return part_element,
 

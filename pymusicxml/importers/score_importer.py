@@ -184,10 +184,22 @@ class ScoreImporter(MusicXMLImporter):
             A Part object
         """
         measures = []
+        current_divisions = None
         
         # Extract measures
         for measure_elem in self._find_elements(part_elem, "measure"):
-            measure = self._import_measure(measure_elem)
+            # Check if this measure has its own divisions setting
+            attributes_elem = self._find_element(measure_elem, "attributes")
+            if attributes_elem is not None:
+                divisions_text = self._get_text(attributes_elem, "divisions")
+                if divisions_text:
+                    try:
+                        current_divisions = float(divisions_text)
+                    except ValueError:
+                        logger.warning(f"Invalid divisions value: {divisions_text}")
+            
+            # Import the measure
+            measure = self._import_measure(measure_elem, current_divisions)
             measures.append(measure)
             
         # Create part
@@ -195,17 +207,17 @@ class ScoreImporter(MusicXMLImporter):
         logger.info(f"Imported part: {part_name}")
         return part
     
-    def _import_measure(self, measure_elem) -> Measure:
+    def _import_measure(self, measure_elem, inherited_divisions=None) -> Measure:
         """
         Import a measure element.
         
         Args:
             measure_elem: The measure element
+            inherited_divisions: The divisions value inherited from previous measures
             
         Returns:
             A Measure object
         """
-        measure_number = int(measure_elem.get("number", "1"))
         
         # Default values
         time_signature = None
@@ -213,7 +225,11 @@ class ScoreImporter(MusicXMLImporter):
         clef = None
         transpose = None
         barline = None
-        divisions = 1  # Default divisions value (if not specified)
+        divisions = inherited_divisions or 1  # Use inherited value or default to 1
+        
+        # Get measure number
+        measure_number = measure_elem.get("number")
+        is_pickup = measure_number == "0" and measure_elem.get("implicit") == "yes"
         
         # Extract attributes
         attributes_elem = self._find_element(measure_elem, "attributes")
@@ -404,7 +420,9 @@ class ScoreImporter(MusicXMLImporter):
             clef=clef,
             transpose=transpose,
             barline=barline,
-            directions_with_displacements=directions_with_displacements
+            directions_with_displacements=directions_with_displacements,
+            number=int(measure_number) if measure_number.isdigit() else measure_number,
+            original_divisions=int(divisions) if divisions == int(divisions) else divisions
         )
         
         return measure
